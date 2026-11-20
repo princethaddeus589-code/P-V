@@ -1,1 +1,3 @@
-
+{"name":"pv-frontend","private":true,"version":"1.0.0","type":"module",
+"scripts":{"dev":"vite","build":"vite build","preview":"vite preview"},
+"dependencies":{"firebase":"^10.12.0"},"devDependencies":{"vite":"^5.4.0"}}

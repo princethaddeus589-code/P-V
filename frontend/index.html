@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>P&amp;V · Prince &amp; Victory</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fbf3ee;--card:#fff;--ink:#3a1220;--mut:#8a6a72;--wine:#8e1b3a;--rose:#e0566f;--gold:#b9873f;--line:#ecd9d4;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1a0911;--card:#2a1019;--ink:#fbe9e6;--mut:#c49aa4;--wine:#e0566f;--rose:#ff7d94;--gold:#e0b46a;--line:#43202c}}
+:root[data-theme="dark"]{--bg:#1a0911;--card:#2a1019;--ink:#fbe9e6;--mut:#c49aa4;--wine:#e0566f;--rose:#ff7d94;--gold:#e0b46a;--line:#43202c}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 Figtree,system-ui,sans-serif;min-height:100vh;overflow-x:hidden}
+h1,h2,h3,.serif{font-family:Fraunces,Georgia,serif;font-weight:600;line-height:1.1}
+button,input,textarea{font:inherit;color:inherit}
+.view{display:none;min-height:100vh}.view.on{display:block}
+.logo{display:inline-flex;align-items:center;gap:8px;font-family:Fraunces,serif;font-weight:600;font-size:22px}
+.logo svg{width:34px;height:34px}
+.btn{background:linear-gradient(135deg,var(--rose),var(--wine));color:#fff;border:0;border-radius:99px;padding:13px 28px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px -8px var(--wine)}
+.btn.ghost{background:none;color:var(--ink);border:1px solid var(--line);box-shadow:none}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+/* the couple: two arches that drift together, heart appears between */
+.pair{position:relative;height:340px;max-width:460px;margin:0 auto}
+.pair .ph{position:absolute;top:0;width:52%;height:300px;border-radius:999px 999px 24px 24px;background-size:cover;background-position:center top;box-shadow:0 24px 50px -20px var(--wine);border:4px solid var(--card)}
+.pair .p{left:0;transform:translateX(-90px) rotate(-8deg);opacity:0;animation:inL 1.6s .2s cubic-bezier(.2,.8,.2,1) forwards,bob 6s 1.8s ease-in-out infinite}
+.pair .v{right:0;top:40px;transform:translateX(90px) rotate(8deg);opacity:0;animation:inR 1.6s .2s cubic-bezier(.2,.8,.2,1) forwards,bob 6s 2.4s ease-in-out infinite reverse}
+.pair .hh{position:absolute;left:50%;top:44%;width:64px;height:64px;margin:-32px 0 0 -32px;z-index:3;opacity:0;animation:pop .8s 1.5s forwards,beat 1.4s 2.3s infinite}
+@keyframes inL{to{transform:translateX(0) rotate(-4deg);opacity:1}}
+@keyframes inR{to{transform:translateX(0) rotate(4deg);opacity:1}}
+@keyframes bob{50%{translate:0 -10px}}
+@keyframes pop{from{opacity:0;scale:.2}to{opacity:1;scale:1}}
+@keyframes beat{30%{scale:1.18}60%{scale:.96}}
+.float{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+.float i{position:absolute;bottom:-30px;color:var(--rose);opacity:.25;animation:up linear infinite}
+@keyframes up{to{transform:translateY(-110vh) rotate(20deg)}}
+#land,#auth{position:relative}
+#land>*:not(.float),#auth>*:not(.float){position:relative;z-index:1}
+.wrap{max-width:980px;margin:0 auto;padding:20px}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:8px 0}
+.hero{text-align:center;padding:24px 0 8px}
+.hero h1{font-size:clamp(44px,9vw,84px);letter-spacing:-.02em;margin:18px 0 10px}
+.hero p{max-width:520px;margin:0 auto 22px;color:var(--mut)}
+.story{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin:48px 0}
+.story div{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px}
+.story h3{font-size:24px;margin-bottom:6px}.story p{color:var(--mut)}
+.auth{max-width:420px;margin:0 auto;padding:16px 20px 40px;text-align:center}
+.auth .pair{height:230px;max-width:300px;transform:scale(.8);margin-bottom:-10px}
+.auth .pair .ph{height:200px}
+.tabs{display:flex;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:4px;margin:14px 0}
+.tabs button{flex:1;border:0;background:none;padding:10px;border-radius:99px;cursor:pointer;color:var(--mut);font-weight:600}
+.tabs .on{background:var(--wine);color:#fff}
+.field{width:100%;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+.err{color:var(--rose);min-height:22px;font-size:14px}
+/* app */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;justify-content:space-between;align-items:center;padding:10px 20px}
+.banner{display:flex;gap:18px;align-items:center;background:linear-gradient(135deg,var(--wine),#4a0f24);color:#fff;border-radius:28px;padding:22px;margin:18px 0}
+.banner .big{font-family:Fraunces,serif;font-size:56px;line-height:1}
+.banner img{width:84px;height:84px;border-radius:50%;object-fit:cover;border:3px solid #fff3}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:16px}
+.chips button{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:7px 16px;cursor:pointer;margin-right:6px}
+.chips .on{background:var(--ink);color:var(--bg)}
+.grid{columns:2 160px;column-gap:12px}
+.m{break-inside:avoid;margin-bottom:12px;border-radius:20px;overflow:hidden;background:var(--card);border:1px solid var(--line);position:relative;cursor:pointer}
+.m img,.m video{width:100%;display:block}
+.m .cap{padding:10px 12px;font-size:14px}.m .cap b{display:block;font-family:Fraunces,serif;font-size:16px}.m .cap span{color:var(--mut);font-size:12px}
+.m .fav{position:absolute;top:8px;right:8px;background:#0006;color:#fff;border:0;border-radius:50%;width:34px;height:34px;cursor:pointer}
+.m .fav.on{background:var(--rose)}
+.modal{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+.modal.on{display:flex}
+.sheet{background:var(--bg);border-radius:24px;padding:22px;width:100%;max-width:440px;max-height:90vh;overflow:auto}
+.sheet h2{font-size:28px;margin-bottom:12px}
+.lb{max-width:560px;text-align:center;color:#fff;background:none}
+.lb img,.lb video{max-width:100%;max-height:70vh;border-radius:16px}
+.empty{text-align:center;color:var(--mut);padding:40px}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01s!important;animation-iteration-count:1!important}}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7d94"/><stop offset="1" stop-color="#8e1b3a"/></linearGradient>
+<symbol id="heart" viewBox="0 0 64 64"><path d="M32 56C10 40 4 29 4 20 4 12 10 7 17 7c6 0 11 3 15 9 4-6 9-9 15-9 7 0 13 5 13 13 0 9-6 20-28 36z" fill="url(#g)"/><path d="M20 38V22h6a5 5 0 010 10h-6M36 22l4 14 4-14" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></symbol></defs></svg>
+
+<section class="view on" id="land"><div class="float" id="fl"></div>
+<div class="wrap"><div class="nav"><span class="logo"><svg><use href="#heart"/></svg>P&amp;V</span><button class="btn ghost" data-go="auth">Sign in</button></div>
+<div class="hero"><div class="pair"><div class="ph p" style="background-image:url(%/img/0.jpg%)"></div><div class="ph v" style="background-image:url(%/img/1.jpg%)"></div><svg class="hh"><use href="#heart"/></svg></div>
+<h1>Prince &amp; Victory</h1>
+<p>Two kids from secondary school who never stopped choosing each other. Together since 2022, and still writing the story.</p>
+<button class="btn" data-go="auth">Open our memories</button></div>
+<div class="story"><div><h3>Where it began</h3><p>We met in secondary school. A friendship, then a feeling neither of us could ignore.</p></div><div><h3>Four years strong</h3><p>2022 until today: school days, growing up, hard weeks and loud laughter, side by side.</p></div><div><h3>Our keepsake</h3><p>P&amp;V is our private place to save photos, videos and the little moments that make us, us.</p></div></div></div></section>
+
+<section class="view" id="auth"><div class="float" id="fl2"></div>
+<div class="auth"><div class="nav"><button class="btn ghost" data-go="land">Back</button><span class="logo"><svg><use href="#heart"/></svg>P&amp;V</span></div>
+<div class="pair"><div class="ph p" style="background-image:url(%/img/0.jpg%)"></div><div class="ph v" style="background-image:url(%/img/1.jpg%)"></div><svg class="hh"><use href="#heart"/></svg></div>
+<h2 class="serif" id="at" style="font-size:34px">Welcome back, love</h2>
+<div class="tabs"><button class="on" data-t="in">Sign in</button><button data-t="up">Create account</button></div>
+<input class="field" id="nm" placeholder="Your name" style="display:none" autocomplete="name">
+<input class="field" id="em" type="email" placeholder="Email" autocomplete="email">
+<input class="field" id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password">
+<div class="err" id="er"></div><button class="btn" id="sub" style="width:100%">Sign in</button></div></section>
+
+<section class="view" id="app"><div class="top"><div class="wrap"><span class="logo"><svg><use href="#heart"/></svg>P&amp;V</span><div><button class="btn" id="add">+ Add memory</button> <button class="btn ghost" id="out">Sign out</button></div></div></div>
+<div class="wrap"><div class="banner"><img src="%/img/0.jpg%" alt=""><img src="%/img/1.jpg%" alt="" style="margin-left:-40px"><div><div class="big">4 years</div><div>of Prince &amp; Victory · since 2022</div></div></div>
+<div class="bar"><div class="chips" id="ch"><button class="on" data-f="all">All</button><button data-f="photo">Photos</button><button data-f="video">Videos</button><button data-f="fav">Favourites</button></div><span id="ct" style="color:var(--mut)"></span></div>
+<div class="grid" id="gr"></div></div></section>
+
+<div class="modal" id="md"><div class="sheet"><h2>New memory</h2>
+<input class="field" type="file" id="fi" accept="image/*,video/*" multiple>
+<input class="field" id="ti" placeholder="Title (e.g. Our first trip)">
+<input class="field" id="da" type="date">
+<textarea class="field" id="no" rows="3" placeholder="What made this moment special?"></textarea>
+<div class="err" id="me"></div>
+<button class="btn" id="sv">Save memory</button> <button class="btn ghost" id="cl">Cancel</button></div></div>
+<div class="modal" id="lbm"><div class="sheet lb" id="lb"></div></div>
+
+<script type="module" src="/src/main.js"></script></body></html>
