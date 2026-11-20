@@ -1,7 +1,8 @@
+import './icons.js';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 
 const E = import.meta.env;
 const fb = initializeApp({
@@ -10,22 +11,24 @@ const fb = initializeApp({
 });
 const auth = getAuth(fb), db = getFirestore(fb), store = getStorage(fb);
 
-// Our first memories (built in)
 const base = [
   ['/1.jpg', 'Golden hour', 'Together'], ['/0.jpg', 'That smile', 'Together'], ['/2.jpg', 'Hand in hand', 'Always'],
   ['/3.jpg', 'Brick wall bliss', 'Our favourite spot'], ['/4.jpg', 'Classic and cool', 'Together'],
   ['/5.jpg', 'Sunshine selfie', 'Together'], ['/6.jpg', 'Walk with me', 'Together'],
 ].map(([s, n, d], i) => ({ id: 'b' + i, t: 'photo', s, n, d, note: '', fav: i < 2, builtin: true }));
 
-let cloud = [], filt = 'all', mode = 'in', unsub = null;
+let cloud = [], filt = 'all', mode = 'in', unsub = null, loadErr = '';
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const show = id => { $$('.view').forEach(v => v.classList.toggle('on', v.id === id)); scrollTo(0, 0); };
 const say = (el, t) => $(el).textContent = t;
 const nice = e => ({
   'auth/invalid-credential': 'Email or password is incorrect.', 'auth/email-already-in-use': 'That email already has an account. Try signing in.',
   'auth/weak-password': 'Password needs at least 6 characters.', 'auth/too-many-requests': 'Too many attempts. Try again in a few minutes.',
-  'permission-denied': 'This space is private to Prince & Victory.', 'storage/unauthorized': 'This space is private to Prince & Victory.',
-}[e.code] || 'Something went wrong. Check your connection and try again.');
+  'permission-denied': 'Blocked by Firestore rules. Check your email is in firestore.rules and the rules are published.',
+  'storage/unauthorized': 'Blocked by Storage rules. Check your email is in storage.rules and the rules are published.',
+  'storage/bucket-not-found': 'Storage bucket not found. Check VITE_FIREBASE_STORAGE_BUCKET.',
+  'storage/quota-exceeded': 'Storage quota exceeded.',
+}[e.code] || `Could not save (${e.code || e.message || 'unknown'}).`);
 
 $$('[data-go]').forEach(b => b.onclick = () => show(b.dataset.go));
 [['#fl', 16], ['#fl2', 12]].forEach(([s, n]) => { for (let i = 0; i < n; i++) { const e = document.createElement('i'); e.textContent = '♥'; e.style.cssText = `left:${Math.random() * 100}%;font-size:${12 + Math.random() * 22}px;animation-duration:${9 + Math.random() * 10}s;animation-delay:${-Math.random() * 12}s`; $(s).append(e); } });
@@ -50,20 +53,20 @@ $('#sub').onclick = async () => {
 $('#out').onclick = () => signOut(auth);
 
 onAuthStateChanged(auth, u => {
-  unsub?.(); unsub = null;
+  unsub?.(); unsub = null; loadErr = '';
   if (!u) { cloud = []; show('land'); return; }
   show('app'); render();
   unsub = onSnapshot(query(collection(db, 'memories'), orderBy('createdAt', 'desc')),
-    s => { cloud = s.docs.map(d => { const v = d.data(); return { id: d.id, t: v.type, s: v.url, n: v.title, d: v.date || 'Together', note: v.note, fav: !!v.favorite, path: v.path }; }); render(); },
-    () => { cloud = []; render(); });
+    s => { loadErr = ''; cloud = s.docs.map(d => { const v = d.data(); return { id: d.id, t: v.type, s: v.url, n: v.title, d: v.date || 'Together', note: v.note, fav: !!v.favorite, path: v.path }; }); render(); },
+    e => { cloud = []; loadErr = 'cannot load (' + (e.code || 'error') + ')'; render(); });
 });
 
 $('#ch').onclick = e => { if (!e.target.dataset.f) return; filt = e.target.dataset.f; $$('#ch button').forEach(x => x.classList.toggle('on', x === e.target)); render(); };
 
 function render() {
   const l = [...cloud, ...base].filter(m => filt === 'all' || (filt === 'fav' ? m.fav : m.t === filt));
-  say('#ct', l.length + ' memories');
-  $('#gr').innerHTML = l.length ? '' : '<div class="empty">Nothing here yet. Tap “Add memory” to save your first one.</div>';
+  say('#ct', l.length + ' memories' + (loadErr ? ' · ' + loadErr : ''));
+  $('#gr').innerHTML = l.length ? '' : '<div class="empty">Nothing here yet. Tap + to add your first memory.</div>';
   l.forEach(m => {
     const d = document.createElement('div'); d.className = 'm';
     d.innerHTML = (m.t === 'video' ? `<video src="${m.s}" muted playsinline preload="metadata"></video>` : `<img src="${m.s}" alt="" loading="lazy">`) +
@@ -94,18 +97,24 @@ $('#add').onclick = () => { say('#me', ''); $('#md').classList.add('on'); };
 $('#cl').onclick = () => $('#md').classList.remove('on');
 $('#sv').onclick = async () => {
   const f = [...$('#fi').files]; if (!f.length) return say('#me', 'Choose at least one photo or video.');
+  if (!auth.currentUser) return say('#me', 'Please sign in again.');
   $('#sv').disabled = true; $('#sv').textContent = 'Saving…'; say('#me', '');
   try {
-    for (const x of f) {
+    for (let i = 0; i < f.length; i++) {
+      const x = f[i];
+      const isVid = x.type.startsWith('video') || /\.(mp4|mov|m4v|webm|3gp)$/i.test(x.name);
+      const type = x.type || (isVid ? 'video/mp4' : 'image/jpeg');
       const path = `memories/${auth.currentUser.uid}/${Date.now()}-${x.name.replace(/[^\w.-]/g, '_')}`;
-      await uploadBytes(ref(store, path), x, { contentType: x.type });
+      const task = uploadBytesResumable(ref(store, path), x, { contentType: type });
+      await new Promise((res, rej) => task.on('state_changed',
+        s => say('#me', `Uploading ${i + 1} of ${f.length}: ${Math.round(s.bytesTransferred / s.totalBytes * 100)}%`), rej, res));
       await addDoc(collection(db, 'memories'), {
-        url: await getDownloadURL(ref(store, path)), path, type: x.type.startsWith('video') ? 'video' : 'photo',
+        url: await getDownloadURL(ref(store, path)), path, type: isVid ? 'video' : 'photo',
         title: $('#ti').value.trim() || 'New memory', date: $('#da').value || '', note: $('#no').value.trim(),
         favorite: false, by: auth.currentUser.uid, createdAt: serverTimestamp(),
       });
     }
-    ['#fi', '#ti', '#da', '#no'].forEach(s => $(s).value = ''); $('#md').classList.remove('on'); filt = 'all';
-  } catch (x) { say('#me', nice(x)); }
+    ['#fi', '#ti', '#da', '#no'].forEach(s => $(s).value = ''); say('#me', ''); $('#md').classList.remove('on'); filt = 'all';
+  } catch (x) { console.error(x); say('#me', nice(x)); }
   $('#sv').disabled = false; $('#sv').textContent = 'Save memory';
 };
