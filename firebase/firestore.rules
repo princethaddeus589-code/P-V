@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function ok() {
       return request.auth != null &&
-        request.auth.token.email in ['princethaddeus589@gmail.com', 'victory@example.com']; // <-- put your 2 emails (lowercase)
+        request.auth.token.email in ['princethaddeus589@gmail.com', 'victorykayla224@gmail.com']; // <-- put your 2 emails (lowercase)
     }
     match /memories/{id} { allow read, write: if ok(); }
   }
