@@ -3,7 +3,7 @@ service firebase.storage {
   match /b/{bucket}/o {
     match /memories/{allPaths=**} {
       allow read, write: if request.auth != null &&
-        request.auth.token.email in ['princethaddeus589@gmail.com', 'victory@example.com']; // <-- your 2 emails
+        request.auth.token.email in ['princethaddeus589@gmail.com', 'victorykayla224@gmail.com']; // <-- your 2 emails
     }
   }
 }
