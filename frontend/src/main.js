@@ -12,9 +12,9 @@ const auth = getAuth(fb), db = getFirestore(fb), store = getStorage(fb);
 
 // Our first memories (built in)
 const base = [
-  ['/img/1.jpg', 'Golden hour', 'Together'], ['/img/0.jpg', 'That smile', 'Together'], ['/img/2.jpg', 'Hand in hand', 'Always'],
-  ['/img/3.jpg', 'Brick wall bliss', 'Our favourite spot'], ['/img/4.jpg', 'Classic and cool', 'Together'],
-  ['/img/5.jpg', 'Sunshine selfie', 'Together'], ['/img/6.jpg', 'Walk with me', 'Together'],
+  ['/1.jpg', 'Golden hour', 'Together'], ['/0.jpg', 'That smile', 'Together'], ['/2.jpg', 'Hand in hand', 'Always'],
+  ['/3.jpg', 'Brick wall bliss', 'Our favourite spot'], ['/4.jpg', 'Classic and cool', 'Together'],
+  ['/5.jpg', 'Sunshine selfie', 'Together'], ['/6.jpg', 'Walk with me', 'Together'],
 ].map(([s, n, d], i) => ({ id: 'b' + i, t: 'photo', s, n, d, note: '', fav: i < 2, builtin: true }));
 
 let cloud = [], filt = 'all', mode = 'in', unsub = null;
