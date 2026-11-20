@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function ok() {
+      return request.auth != null &&
+        request.auth.token.email in ['prince@example.com', 'victory@example.com']; // <-- put your 2 emails (lowercase)
+    }
+    match /memories/{id} { allow read, write: if ok(); }
+  }
+}
