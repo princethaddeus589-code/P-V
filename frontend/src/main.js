@@ -1,20 +1,21 @@
 import './icons.js';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 
 const E = import.meta.env;
 const fb = initializeApp({
   apiKey: E.VITE_FIREBASE_API_KEY, authDomain: E.VITE_FIREBASE_AUTH_DOMAIN, projectId: E.VITE_FIREBASE_PROJECT_ID,
   storageBucket: E.VITE_FIREBASE_STORAGE_BUCKET, messagingSenderId: E.VITE_FIREBASE_MESSAGING_SENDER_ID, appId: E.VITE_FIREBASE_APP_ID,
 });
-const auth = getAuth(fb), db = getFirestore(fb);
+const auth = getAuth(fb), db = initializeFirestore(fb, { experimentalForceLongPolling: true });
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error('Could not reach the database. In Firebase, check that Firestore Database is created and the rules are published.')), ms))]);
 const SB = (E.VITE_SUPABASE_URL || '').replace(/\/$/, ''), KEY = E.VITE_SUPABASE_ANON_KEY, BUCKET = 'memories';
 const sbHeaders = { apikey: KEY, ...(KEY?.startsWith('eyJ') ? { Authorization: 'Bearer ' + KEY } : {}) };
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 
-/* ---------- layout: bottom bar like WhatsApp (injected, no index.html change needed) ---------- */
+/* ---------- bottom bar like WhatsApp (injected, no index.html change needed) ---------- */
 const st = document.createElement('style');
 st.textContent = `
 .top .wrap{justify-content:center!important}
@@ -50,7 +51,7 @@ const base = [
   ['/5.jpg', 'Sunshine selfie', 'Together'], ['/6.jpg', 'Walk with me', 'Together'],
 ].map(([s, n, d], i) => ({ id: 'b' + i, t: 'photo', s, n, d, note: '', fav: i < 2, builtin: true }));
 
-let cloud = [], filt = 'all', mode = 'in', unsub = null, loadErr = '';
+let cloud = [], filt = 'all', mode = 'in', unsub = null, loadErr = '', pending = false;
 const show = id => { $$('.view').forEach(v => v.classList.toggle('on', v.id === id)); scrollTo(0, 0); };
 const say = (el, t) => $(el).textContent = t;
 const nice = e => ({
@@ -88,8 +89,8 @@ onAuthStateChanged(auth, u => {
   unsub?.(); unsub = null; loadErr = '';
   if (!u) { cloud = []; show('land'); return; }
   show('app'); render();
-  unsub = onSnapshot(query(collection(db, 'memories'), orderBy('createdAt', 'desc')),
-    s => { loadErr = ''; cloud = s.docs.map(d => { const v = d.data(); return { id: d.id, t: v.type, s: v.url, n: v.title, d: v.date || 'Together', note: v.note, fav: !!v.favorite, path: v.path }; }); render(); },
+  unsub = onSnapshot(query(collection(db, 'memories'), orderBy('createdAt', 'desc')), { includeMetadataChanges: true },
+    s => { loadErr = ''; pending = s.metadata.hasPendingWrites || s.metadata.fromCache; cloud = s.docs.map(d => { const v = d.data(); return { id: d.id, t: v.type, s: v.url, n: v.title, d: v.date || 'Together', note: v.note, fav: !!v.favorite, path: v.path }; }); render(); },
     e => { cloud = []; loadErr = 'cannot load (' + (e.code || 'error') + ')'; render(); });
 });
 
@@ -107,7 +108,7 @@ async function remove(m) {
 
 function render() {
   const l = [...cloud, ...base.filter(b => !hidden.includes(b.id))].filter(m => filt === 'all' || (filt === 'fav' ? m.fav : m.t === filt));
-  say('#ct', l.length + ' memories' + (loadErr ? ' · ' + loadErr : ''));
+  say('#ct', l.length + ' memories' + (loadErr ? ' · ' + loadErr : pending ? ' · syncing…' : ''));
   $('#gr').innerHTML = l.length ? '' : '<div class="empty">Nothing here yet. Tap + to add your first memory.</div>';
   l.forEach(m => {
     const d = document.createElement('div'); d.className = 'm';
@@ -159,11 +160,11 @@ $('#sv').onclick = async () => {
   try {
     for (let i = 0; i < f.length; i++) {
       const r = await upload(f[i], `${i + 1} of ${f.length}`);
-      await addDoc(collection(db, 'memories'), {
+      await withTimeout(addDoc(collection(db, 'memories'), {
         url: r.url, path: r.path, type: isVideo(f[i]) ? 'video' : 'photo',
         title: $('#ti').value.trim() || 'New memory', date: $('#da').value || '', note: $('#no').value.trim(),
         favorite: false, by: auth.currentUser.uid, createdAt: serverTimestamp(),
-      });
+      }), 20000);
     }
     ['#fi', '#ti', '#da', '#no'].forEach(s => $(s).value = ''); say('#me', ''); $('#md').classList.remove('on'); filt = 'all';
   } catch (x) { console.error(x); say('#me', nice(x)); }
