@@ -10,7 +10,7 @@ const fb = initializeApp({
 });
 const auth = getAuth(fb), db = getFirestore(fb);
 const SB = (E.VITE_SUPABASE_URL || '').replace(/\/$/, ''), KEY = E.VITE_SUPABASE_ANON_KEY, BUCKET = 'memories';
-const sbHeaders = { apikey: KEY, Authorization: 'Bearer ' + KEY };
+const sbHeaders = { apikey: KEY, ...(KEY?.startsWith('eyJ') ? { Authorization: 'Bearer ' + KEY } : {}) };
 
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 
@@ -138,7 +138,7 @@ function upload(file, label) {
     const path = `${Date.now()}-${file.name.replace(/[^\w.-]/g, '_')}`;
     const x = new XMLHttpRequest();
     x.open('POST', `${SB}/storage/v1/object/${BUCKET}/${path}`);
-    x.setRequestHeader('apikey', KEY); x.setRequestHeader('Authorization', 'Bearer ' + KEY);
+    x.setRequestHeader('apikey', KEY); if (KEY.startsWith('eyJ')) x.setRequestHeader('Authorization', 'Bearer ' + KEY);
     x.setRequestHeader('Content-Type', file.type || (isVideo(file) ? 'video/mp4' : 'image/jpeg'));
     x.upload.onprogress = e => e.lengthComputable && say('#me', `Uploading ${label}: ${Math.round(e.loaded / e.total * 100)}%`);
     x.onload = () => {
