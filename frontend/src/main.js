@@ -42,8 +42,7 @@ if (!$('.dock')) {
 $('#add')?.setAttribute('data-act', 'add'); $('#out')?.setAttribute('data-act', 'out');
 
 /* ---------- data ---------- */
-let hidden = []; try { hidden = JSON.parse(localStorage.getItem('pvHidden') || '[]'); } catch {}
-const hide = id => { hidden.push(id); try { localStorage.setItem('pvHidden', JSON.stringify(hidden)); } catch {} };
+let hiddenIds = []; // starter photos deleted by either of you (shared through Firestore)
 
 const base = [
   ['/1.jpg', 'Golden hour', 'Together'], ['/0.jpg', 'That smile', 'Together'], ['/2.jpg', 'Hand in hand', 'Always'],
@@ -90,7 +89,7 @@ onAuthStateChanged(auth, u => {
   if (!u) { cloud = []; show('land'); return; }
   show('app'); render();
   unsub = onSnapshot(query(collection(db, 'memories'), orderBy('createdAt', 'desc')), { includeMetadataChanges: true },
-    s => { loadErr = ''; pending = s.metadata.hasPendingWrites || s.metadata.fromCache; cloud = s.docs.map(d => { const v = d.data(); return { id: d.id, t: v.type, s: v.url, n: v.title, d: v.date || 'Together', note: v.note, fav: !!v.favorite, path: v.path }; }); render(); },
+    s => { loadErr = ''; pending = s.metadata.hasPendingWrites || s.metadata.fromCache; hiddenIds = s.docs.map(d => d.data().hide).filter(Boolean); cloud = s.docs.filter(d => !d.data().hide).map(d => { const v = d.data(); return { id: d.id, t: v.type, s: v.url, n: v.title, d: v.date || 'Together', note: v.note, fav: !!v.favorite, path: v.path }; }); render(); },
     e => { cloud = []; loadErr = 'cannot load (' + (e.code || 'error') + ')'; render(); });
 });
 
@@ -98,7 +97,7 @@ $('#ch').onclick = e => { if (!e.target.dataset.f) return; filt = e.target.datas
 
 async function remove(m) {
   if (!confirm('Delete this memory? This removes it for both of you.')) return false;
-  if (m.builtin) { hide(m.id); render(); return true; }
+  if (m.builtin) { try { await addDoc(collection(db, 'memories'), { hide: m.id, createdAt: serverTimestamp(), by: auth.currentUser.uid }); return true; } catch (x) { alert(nice(x)); return false; } }
   try {
     await deleteDoc(doc(db, 'memories', m.id));
     if (m.path) fetch(`${SB}/storage/v1/object/${BUCKET}/${m.path}`, { method: 'DELETE', headers: sbHeaders }).catch(() => {});
@@ -107,7 +106,7 @@ async function remove(m) {
 }
 
 function render() {
-  const l = [...cloud, ...base.filter(b => !hidden.includes(b.id))].filter(m => filt === 'all' || (filt === 'fav' ? m.fav : m.t === filt));
+  const l = [...cloud, ...base.filter(b => !hiddenIds.includes(b.id))].filter(m => filt === 'all' || (filt === 'fav' ? m.fav : m.t === filt));
   say('#ct', l.length + ' memories' + (loadErr ? ' · ' + loadErr : pending ? ' · syncing…' : ''));
   $('#gr').innerHTML = l.length ? '' : '<div class="empty">Nothing here yet. Tap + to add your first memory.</div>';
   l.forEach(m => {
