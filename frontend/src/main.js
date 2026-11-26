@@ -91,7 +91,7 @@ $('#cl').onclick = () => $('#md').classList.remove('on');
 onAuthStateChanged(auth, u => {
   unsub?.(); unsub = null; loadErr = '';
   if (!u) { cloud = []; show('land'); return; }
-  show('app'); render(); refreshBar(); if (pushOK && Notification.permission === 'granted') saveSub().catch(() => {});
+  show('app'); render(); refreshBar(); maybeLock(); refreshFace(); if (pushOK && Notification.permission === 'granted') saveSub().catch(() => {});
   unsub = onSnapshot(query(collection(db, 'memories'), orderBy('createdAt', 'desc')), { includeMetadataChanges: true },
     s => { loadErr = ''; pending = s.metadata.hasPendingWrites || s.metadata.fromCache; hiddenIds = s.docs.map(d => d.data().hide).filter(Boolean); cloud = s.docs.filter(d => !d.data().hide).map(d => { const v = d.data(); return { id: d.id, t: v.type, s: v.url, n: v.title, d: v.date || 'Together', note: v.note, fav: !!v.favorite, path: v.path }; }); render(); },
     e => { cloud = []; loadErr = 'cannot load (' + (e.code || 'error') + ')'; render(); });
@@ -226,3 +226,56 @@ async function notifyOthers(n, title) {
   } catch {}
 }
 refreshBar();
+
+/* ---------- Face ID lock (WebAuthn: Face ID / Touch ID stays on the phone) ---------- */
+const faceEnc = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const faceDec = v => Uint8Array.from(atob(v), c => c.charCodeAt(0));
+const faceOn = () => { try { return !!localStorage.getItem('pvFace') && localStorage.getItem('pvFaceUid') === auth.currentUser?.uid; } catch { return false; } };
+let unlocked = false, hiddenAt = 0;
+
+const lockEl = document.createElement('div');
+lockEl.style.cssText = 'position:fixed;inset:0;z-index:50;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px';
+lockEl.innerHTML = '<svg style="width:84px;height:84px"><use href="#heart"/></svg><h2 class="serif" style="font-size:32px">P&amp;V is locked</h2><p style="color:var(--mut)">Only you two can open our memories.</p><button class="btn" id="unl">Unlock with Face ID</button><button class="btn ghost" id="pwd">Use password instead</button><div class="err" id="lerr"></div>';
+document.body.append(lockEl);
+
+async function unlock(auto) {
+  try {
+    await navigator.credentials.get({ publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)), rpId: location.hostname, userVerification: 'required', timeout: 60000,
+      allowCredentials: [{ type: 'public-key', id: faceDec(localStorage.getItem('pvFace')), transports: ['internal'] }],
+    } });
+    unlocked = true; lockEl.style.display = 'none'; $('#lerr').textContent = '';
+  } catch { if (!auto) $('#lerr').textContent = 'Face ID did not match. Try again or use your password.'; }
+}
+function maybeLock() { if (faceOn() && !unlocked) { lockEl.style.display = 'flex'; unlock(true); } }
+$('#unl').onclick = () => unlock(false);
+$('#pwd').onclick = () => { unlocked = true; lockEl.style.display = 'none'; signOut(auth); };
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) hiddenAt = Date.now();
+  else if (auth.currentUser && faceOn() && Date.now() - hiddenAt > 60000) { unlocked = false; maybeLock(); }
+});
+
+const fbar = document.createElement('div');
+fbar.style.cssText = 'display:none;margin:0 0 14px;padding:14px 16px;border-radius:18px;background:var(--card);border:1px solid var(--line);font-size:14px';
+nb.after(fbar);
+async function refreshFace() {
+  let ok = false;
+  try { ok = !!window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch {}
+  if (!ok || !auth.currentUser) { fbar.style.display = 'none'; return; }
+  const st = 'padding:8px 16px;font-size:14px;margin-left:8px';
+  fbar.innerHTML = faceOn() ? `🔒 Face ID lock is on <button class="btn ghost" id="foff" style="${st}">Turn off</button>` : `🔒 Open P&V with Face ID <button class="btn" id="fon" style="${st}">Turn on</button>`;
+  fbar.style.display = 'block';
+  if ($('#fon')) $('#fon').onclick = async () => {
+    try {
+      const cred = await navigator.credentials.create({ publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)), rp: { name: 'P&V', id: location.hostname },
+        user: { id: crypto.getRandomValues(new Uint8Array(16)), name: auth.currentUser.email, displayName: myName() },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' }, timeout: 60000,
+      } });
+      localStorage.setItem('pvFace', faceEnc(cred.rawId)); localStorage.setItem('pvFaceUid', auth.currentUser.uid); unlocked = true;
+    } catch (x) { alert('Could not turn on Face ID: ' + (x.message || x)); }
+    refreshFace();
+  };
+  if ($('#foff')) $('#foff').onclick = () => { if (confirm('Turn off the Face ID lock on this phone?')) { try { localStorage.removeItem('pvFace'); localStorage.removeItem('pvFaceUid'); } catch {} refreshFace(); } };
+}
