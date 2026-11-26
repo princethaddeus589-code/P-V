@@ -1,7 +1,11 @@
 import './icons.js';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
-import { initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { initializeFirestore, collection, addDoc, onSnapshot, query, orderBy, updateDoc, deleteDoc, doc, serverTimestamp, getDocs, setDoc } from 'firebase/firestore';
+
+/* use the real manifest file (needed for iPhone Home Screen notifications) */
+document.querySelectorAll('link[rel="manifest"]').forEach(l => l.remove());
+const ml = document.createElement('link'); ml.rel = 'manifest'; ml.href = '/manifest.webmanifest'; document.head.append(ml);
 
 const E = import.meta.env;
 const fb = initializeApp({
@@ -87,7 +91,7 @@ $('#cl').onclick = () => $('#md').classList.remove('on');
 onAuthStateChanged(auth, u => {
   unsub?.(); unsub = null; loadErr = '';
   if (!u) { cloud = []; show('land'); return; }
-  show('app'); render();
+  show('app'); render(); refreshBar(); if (pushOK && Notification.permission === 'granted') saveSub().catch(() => {});
   unsub = onSnapshot(query(collection(db, 'memories'), orderBy('createdAt', 'desc')), { includeMetadataChanges: true },
     s => { loadErr = ''; pending = s.metadata.hasPendingWrites || s.metadata.fromCache; hiddenIds = s.docs.map(d => d.data().hide).filter(Boolean); cloud = s.docs.filter(d => !d.data().hide).map(d => { const v = d.data(); return { id: d.id, t: v.type, s: v.url, n: v.title, d: v.date || 'Together', note: v.note, fav: !!v.favorite, path: v.path }; }); render(); },
     e => { cloud = []; loadErr = 'cannot load (' + (e.code || 'error') + ')'; render(); });
@@ -165,7 +169,60 @@ $('#sv').onclick = async () => {
         favorite: false, by: auth.currentUser.uid, createdAt: serverTimestamp(),
       }), 20000);
     }
+    notifyOthers(f.length, $('#ti').value.trim());
     ['#fi', '#ti', '#da', '#no'].forEach(s => $(s).value = ''); say('#me', ''); $('#md').classList.remove('on'); filt = 'all';
   } catch (x) { console.error(x); say('#me', nice(x)); }
   $('#sv').disabled = false; $('#sv').textContent = 'Save memory';
 };
+
+/* ---------- notifications (Web Push) ---------- */
+const VAPID = E.VITE_VAPID_PUBLIC_KEY;
+const b64 = v => { const r = atob((v + '='.repeat((4 - v.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); };
+var pushOK = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+const myName = () => auth.currentUser?.displayName || (auth.currentUser?.email || 'Someone').split('@')[0];
+
+async function saveSub() {
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID) });
+  const j = sub.toJSON();
+  const id = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(j.endpoint)))].map(x => x.toString(16).padStart(2, '0')).join('');
+  await setDoc(doc(db, 'push_subs', id), { sub: j, uid: auth.currentUser.uid, name: myName(), createdAt: serverTimestamp() });
+}
+
+const nb = document.createElement('div');
+nb.style.cssText = 'display:none;margin:0 0 14px;padding:14px 16px;border-radius:18px;background:var(--card);border:1px solid var(--line);font-size:14px';
+$('.bar').parentNode.insertBefore(nb, $('.bar'));
+function refreshBar() {
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (!pushOK) {
+    nb.textContent = standalone ? '🔔 Notifications need iOS 16.4 or newer.' : '🔔 For notifications, open P&V from your Home Screen icon (Share → Add to Home Screen).';
+    nb.style.display = 'block'; return;
+  }
+  const p = Notification.permission;
+  if (p === 'granted') { nb.style.display = 'none'; return; }
+  if (p === 'denied') { nb.textContent = '🔔 Notifications are blocked. Turn them on in Settings → Notifications → P&V.'; nb.style.display = 'block'; return; }
+  nb.innerHTML = '🔔 Get a notification when your love adds a memory <button class="btn" id="nbtn" style="padding:8px 16px;font-size:14px;margin-left:8px">Turn on</button>';
+  nb.style.display = 'block';
+  $('#nbtn').onclick = async () => {
+    try { if (await Notification.requestPermission() === 'granted') await saveSub(); }
+    catch (x) { alert('Could not turn on notifications: ' + (x.message || x)); }
+    refreshBar();
+  };
+}
+
+async function notifyOthers(n, title) {
+  try {
+    const snap = await getDocs(collection(db, 'push_subs'));
+    const subs = snap.docs.filter(d => d.data().uid !== auth.currentUser.uid).map(d => ({ id: d.id, sub: d.data().sub }));
+    if (!subs.length) return;
+    const token = await auth.currentUser.getIdToken();
+    const r = await fetch('/api/notify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ subs, title: `${myName()} added ${n > 1 ? n + ' new memories' : 'a new memory'} 💞`, body: title || 'Open P&V to see it' }),
+    });
+    const j = await r.json(); (j.dead || []).forEach(id => deleteDoc(doc(db, 'push_subs', id)).catch(() => {}));
+  } catch {}
+}
+refreshBar();
